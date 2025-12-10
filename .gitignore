@@ -1,0 +1,84 @@
+# ---------------------------
+# Python
+# ---------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+*.p
+*.so
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ---------------------------
+# Logs & Runtime Files
+# ---------------------------
+*.log
+*.err
+*.out
+logs/
+log/
+*.pid
+
+# Rotating logs
+live_bot.log*
+live_bot.err*
+
+# Walkforward / backtest logs
+walkforward_logs/
+sweep_logs/
+trades_log*.csv
+trades_live*.csv
+live_trades.csv
+
+# ---------------------------
+# Sensitive Config
+# ---------------------------
+config.json
+*.key
+*.secret
+*.token
+*.env
+
+# Do NOT commit your MT5 credentials
+mt5_credentials.json
+
+# ---------------------------
+# Data Files (Large)
+# ---------------------------
+data/*.csv
+data/*.parquet
+data/*.feather
+data/*.pkl
+data/*.json
+
+# raw ticks or downloaded data
+*ticks*.csv
+*ticks*.parquet
+
+# ---------------------------
+# OS / IDE / Misc
+# ---------------------------
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.bak
+
+# ---------------------------
+# Build / Distribution
+# ---------------------------
+build/
+dist/
+*.egg-info/
+.eggs/
+

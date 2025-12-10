@@ -1,0 +1,4 @@
+pandas
+numpy
+metaTrader5==5.0.37
+python-telegram-bot==20.0b0
