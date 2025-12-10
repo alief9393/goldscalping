@@ -121,7 +121,12 @@ def main(args):
                     closed_min = current_min - pd.Timedelta(minutes=1)
                     if last_min_idx >= closed_min:
                         # get the closed candle row (one-minute bar that just closed)
-                        closed_bar = candles_1m.loc[closed_min]
+                        idx = candles_1m.index.searchsorted(closed_min, side="right") - 1
+                        if idx < 0:
+                            continue
+
+                        closed_bar = candles_1m.iloc[idx]
+                        closed_min = candles_1m.index[idx]
                         # example: check entry signal
                         side, reason = compute_entry_signal(closed_bar)
                         if side and open_trade is None:
