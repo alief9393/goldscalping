@@ -19,6 +19,9 @@ from datetime import datetime, timezone, timedelta
 
 from mt5_client import MT5Client
 
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 # ---------- user strategy hooks (replace with your full logic) ----------
 def compute_entry_signal(candle_row):
     """
@@ -59,7 +62,7 @@ def ticks_to_ohlcv(ticks_df, freq='1s'):
         return pd.DataFrame()
     o = ticks_df['price'].resample(freq).ohlc()
     v = ticks_df['price'].resample(freq).count().rename('volume')
-    df = pd.concat([o, v], axis=1).fillna(method='ffill')
+    df = pd.concat([o, v], axis=1).ffill()
     df = df.dropna(subset=['open'])
     return df
 
@@ -96,7 +99,11 @@ def main(args):
 
             if not new_ticks.empty:
                 # append
-                tick_buffer = pd.concat([tick_buffer, new_ticks])
+                if new_ticks is not None and len(new_ticks) > 0:
+                    if tick_buffer is None or len(tick_buffer) == 0:
+                        tick_buffer = new_ticks.copy()
+                    else:
+                        tick_buffer = pd.concat([tick_buffer, new_ticks], ignore_index=False)
                 tick_buffer = tick_buffer[~tick_buffer.index.duplicated(keep='last')]
                 tick_buffer = tick_buffer.sort_index()
 
