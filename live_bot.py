@@ -245,7 +245,7 @@ class LiveBot:
             f"• Last price: `{last_price}`\n"
             f"• Balance (sim): `${self.balance:.2f}`\n"
             f"• Open trade: `{bool(self.open_trade)}`\n"
-            f"• Time (UTC): `{datetime.utcnow()}`"
+            f"• Time (UTC): `{datetime.now(timezone.utc)}`"
         )
         if self.notifier_enabled:
             self.send_notify(msg)
