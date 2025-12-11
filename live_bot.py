@@ -239,10 +239,11 @@ class LiveBot:
         tick_age = "N/A"
         if last_tick_time is not None:
             tick_age = f"{(datetime.now(timezone.utc) - last_tick_time).total_seconds():.1f}s"
+        lp = f"{last_price:.4f}" if (last_price is not None and isinstance(last_price, (int,float))) else "N/A"
         msg = (
             "🤖 *BOT HEARTBEAT (15m)*\n"
             f"• Last tick age: `{tick_age}`\n"
-            f"• Last price: `{last_price}`\n"
+            f"• Last price: `{lp}`\n"
             f"• Balance (sim): `${self.balance:.2f}`\n"
             f"• Open trade: `{bool(self.open_trade)}`\n"
             f"• Time (UTC): `{datetime.now(timezone.utc)}`"
@@ -395,7 +396,10 @@ class LiveBot:
 
                 # update last tick timestamp and last price
                 self.last_tick_ts = self.tick_buffer.index[-1]
-                last_price = float(self.tick_buffer['price'].iloc[-1])
+                try:
+                    last_price = float(self.tick_buffer['price'].iloc[-1])
+                except Exception:
+                    last_price = None
 
                 # build candles
                 candles_1s = ticks_to_ohlcv(self.tick_buffer, '1s')
