@@ -236,14 +236,32 @@ class LiveBot:
         if now - self._last_heartbeat < self.heartbeat_interval:
             return
         self._last_heartbeat = now
+
+        # Try to ensure we have a numeric last_price to show
+        if last_price is None:
+            try:
+                if hasattr(self, 'tick_buffer') and self.tick_buffer is not None and not self.tick_buffer.empty:
+                    last_price = float(self.tick_buffer['price'].iloc[-1])
+            except Exception:
+                last_price = None
+
         tick_age = "N/A"
         if last_tick_time is not None:
-            tick_age = f"{(datetime.now(timezone.utc) - last_tick_time).total_seconds():.1f}s"
-        lp = f"{last_price:.4f}" if (last_price is not None and isinstance(last_price, (int,float))) else "N/A"
+            try:
+                tick_age = f"{(datetime.now(timezone.utc) - last_tick_time).total_seconds():.1f}s"
+            except Exception:
+                tick_age = "N/A"
+
+        lp = f"{last_price:.4f}" if (last_price is not None and isinstance(last_price, (int, float))) else "N/A"
+        tb_len = len(self.tick_buffer) if (hasattr(self, 'tick_buffer') and self.tick_buffer is not None) else 0
+        last_ts = self.last_tick_ts.isoformat() if (hasattr(self, 'last_tick_ts') and self.last_tick_ts is not None) else "N/A"
+
         msg = (
             "🤖 *BOT HEARTBEAT (15m)*\n"
             f"• Last tick age: `{tick_age}`\n"
             f"• Last price: `{lp}`\n"
+            f"• Tick buffer len: `{tb_len}`\n"
+            f"• Last tick ts: `{last_ts}`\n"
             f"• Balance (sim): `${self.balance:.2f}`\n"
             f"• Open trade: `{bool(self.open_trade)}`\n"
             f"• Time (UTC): `{datetime.now(timezone.utc)}`"
@@ -398,7 +416,8 @@ class LiveBot:
                 self.last_tick_ts = self.tick_buffer.index[-1]
                 try:
                     last_price = float(self.tick_buffer['price'].iloc[-1])
-                except Exception:
+                except Exception as e:
+                    logger.warning("failed to parse last_price from tick_buffer: %s", e)
                     last_price = None
 
                 # build candles
