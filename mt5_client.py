@@ -127,7 +127,7 @@ class MT5Client:
             raise RuntimeError(f"Symbol not found: {symbol}")
 
         price = mt5.symbol_info_tick(symbol).ask if side.lower() == 'buy' else mt5.symbol_info_tick(symbol).bid
-        deviation = 5  # allowable slippage in points (tune)
+        deviation = 150  # allowable slippage in points (tune)
 
         request = {
             "action": mt5.TRADE_ACTION_DEAL,
