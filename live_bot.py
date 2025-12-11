@@ -621,7 +621,18 @@ class LiveBot:
                 order_response = None
                 if not self.dry_run:
                     try:
-                        order_response = self.mt5.market_order(self.symbol, side, trade['lots'], sl=trade['stop'], tp=trade['tp'], comment="live_entry")
+                        api_side = 'buy' if side == 'long' else 'sell' if side == 'short' else None
+                        if api_side is None:
+                            logger.error("Unknown side value: %s — skipping order", side)
+                            exec_ok = False
+                        else:
+                            try:
+                                order_response = self.mt5.market_order(self.symbol, api_side, trade['lots'], sl=trade['stop'], tp=trade['tp'], comment="live_entry")
+                                exec_ok = order_response.get('ok', False)
+                                logger.info("[live_bot] market_order response: %s", order_response)
+                            except Exception as e:
+                                logger.exception("market_order failed: %s", e)
+                                exec_ok = False
                         exec_ok = order_response.get('ok', False)
                         logger.info("[live_bot] market_order response: %s", order_response)
                     except Exception as e:
