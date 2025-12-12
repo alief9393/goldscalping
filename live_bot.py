@@ -514,11 +514,33 @@ class LiveBot:
                 self.tick_buffer = self.tick_buffer.sort_index()
 
                 # prune buffer
+                # prune buffer
                 cutoff = pd.to_datetime(datetime.now(timezone.utc) - timedelta(seconds=keep_seconds))
-                self.tick_buffer = self.tick_buffer[self.tick_buffer.index >= cutoff]
+                if not self.tick_buffer.empty:
+                    self.tick_buffer = self.tick_buffer[self.tick_buffer.index >= cutoff]
+                else:
+                    # defensive: nothing to prune
+                    self.tick_buffer = self.tick_buffer
 
-                # update last tick timestamp and last price
-                self.last_tick_ts = self.tick_buffer.index[-1]
+                # If buffer became empty after pruning, skip processing this loop iteration
+                if self.tick_buffer is None or self.tick_buffer.empty:
+                    logger.warning("tick_buffer empty after pruning. new_ticks_count=%d cutoff=%s last_tick_ts=%s",
+                                   0 if new_ticks is None else len(new_ticks),
+                                   cutoff.isoformat(),
+                                   getattr(self, 'last_tick_ts', None))
+                    # don't update last_tick_ts; wait for next ticks
+                    time.sleep(loop_sleep)
+                    continue
+
+                # update last tick timestamp and last price safely
+                try:
+                    self.last_tick_ts = self.tick_buffer.index[-1]
+                except Exception as e:
+                    logger.warning("failed to read last tick timestamp from tick_buffer: %s", e)
+                    # defensive fallback: keep existing last_tick_ts or set a recent UTC timestamp
+                    if not hasattr(self, 'last_tick_ts') or self.last_tick_ts is None:
+                        self.last_tick_ts = datetime.now(timezone.utc) - timedelta(seconds=2)
+
                 try:
                     last_price = float(self.tick_buffer['price'].iloc[-1])
                 except Exception as e:
