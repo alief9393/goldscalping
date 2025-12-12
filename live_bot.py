@@ -212,11 +212,111 @@ class LiveBot:
         self._last_heartbeat = 0
 
     def connect(self):
+        """
+        Connect to MT5 using credentials from config['mt5'].
+        This method is defensive about MT5Client signature: it tries to call
+        mt5.connect(**kwargs) where kwargs are login/password/server/path_mt5_terminal if present.
+        """
         logger.info("[mt5] connecting...")
-        self.mt5.connect()
-        self.mt5.ensure_symbol(self.symbol)
+        mt5_cfg = self.config.get('mt5', {}) or {}
+        # prepare kwargs for mt5.connect - keep names flexible
+        connect_kwargs = {}
+        if 'login' in mt5_cfg:
+            connect_kwargs['login'] = mt5_cfg['login']
+        if 'password' in mt5_cfg:
+            connect_kwargs['password'] = mt5_cfg['password']
+        # server might be named 'server' or 'srv' in some wrappers
+        if 'server' in mt5_cfg:
+            connect_kwargs['server'] = mt5_cfg['server']
+        if 'path_mt5_terminal' in mt5_cfg:
+            connect_kwargs['path_mt5_terminal'] = mt5_cfg['path_mt5_terminal']
+
+        try:
+            # If MT5Client.connect accepts kwargs it'll use them; otherwise fall back to parameterless call
+            try:
+                self.mt5.connect(**connect_kwargs)
+            except TypeError:
+                # older/simple wrapper may expect positional args or no args
+                self.mt5.connect()
+        except Exception as e:
+            logger.exception("[mt5] connect failed: %s", e)
+            raise
+
+        try:
+            self.mt5.ensure_symbol(self.symbol)
+        except Exception as e:
+            logger.exception("[mt5] ensure_symbol failed: %s", e)
+            # continue, maybe later
+        # refresh live balance from broker (if available)
+        try:
+            self.refresh_balance()
+        except Exception as e:
+            logger.warning("[mt5] refresh_balance failed after connect: %s", e)
+
         logger.info("[mt5] connected")
 
+    def refresh_balance(self):
+        """
+        Update self.balance from MT5 account info if possible.
+        This method is defensive: supports a few common MT5Client patterns:
+         - self.mt5.get_account_info() -> dict-like with 'balance'
+         - self.mt5.account_info() -> object with .balance or dict
+         - self.mt5.account() or self.mt5.get_balance()
+         - self.mt5.balance attribute
+        If none available, leaves self.balance unchanged.
+        """
+        try:
+            # 1) try get_account_info()
+            if hasattr(self.mt5, "get_account_info"):
+                info = self.mt5.get_account_info()
+                if info:
+                    # info may be dict or object
+                    bal = None
+                    if isinstance(info, dict):
+                        bal = info.get("balance") or info.get("Balance")
+                    else:
+                        bal = getattr(info, "balance", None) or getattr(info, "Balance", None)
+                    if bal is not None:
+                        self.balance = float(bal)
+                        return self.balance
+            # 2) try account_info()
+            if hasattr(self.mt5, "account_info"):
+                try:
+                    info = self.mt5.account_info()
+                except TypeError:
+                    info = self.mt5.account_info  # maybe property
+                if info:
+                    if isinstance(info, dict):
+                        bal = info.get("balance") or info.get("Balance")
+                    else:
+                        bal = getattr(info, "balance", None) or getattr(info, "Balance", None)
+                    if bal is not None:
+                        self.balance = float(bal)
+                        return self.balance
+            # 3) try get_balance() or balance() style
+            if hasattr(self.mt5, "get_balance"):
+                bal = self.mt5.get_balance()
+                if bal is not None:
+                    self.balance = float(bal)
+                    return self.balance
+            if hasattr(self.mt5, "balance"):
+                try:
+                    bal_prop = getattr(self.mt5, "balance")
+                    if callable(bal_prop):
+                        bal = bal_prop()
+                    else:
+                        bal = bal_prop
+                    if bal is not None:
+                        self.balance = float(bal)
+                        return self.balance
+                except Exception:
+                    pass
+        except Exception as e:
+            logger.debug("refresh_balance encountered error: %s", e)
+
+        # fallback: keep existing self.balance (from config 'initial' or previous update)
+        return self.balance
+    
     def disconnect(self):
         try:
             self.mt5.shutdown()
@@ -236,6 +336,11 @@ class LiveBot:
         if now - self._last_heartbeat < self.heartbeat_interval:
             return
         self._last_heartbeat = now
+
+        try:
+            self.refresh_balance()
+        except Exception:
+            logger.debug("heartbeat: refresh_balance failed, using cached balance")
 
         # Try to ensure we have a numeric last_price to show
         if last_price is None:
@@ -777,8 +882,23 @@ def main():
         cfg['dry_run'] = True
 
     notifier = None
-    if cfg.get('telegram', {}).get('enabled', False):
-        notifier = NotifierTelegram(cfg['telegram'].get('bot_token'), cfg['telegram'].get('chat_id'))
+    telegram_cfg = cfg.get('telegram', {}) or {}
+    if telegram_cfg.get('enabled', False):
+        # support optional timeout (number or [connect, read]) and dedup_seconds in config
+        timeout_cfg = telegram_cfg.get('timeout', telegram_cfg.get('timeout_secs', 10))
+        dedup_seconds = telegram_cfg.get('dedup_seconds', telegram_cfg.get('dedup_window', 5.0))
+        # NotifierTelegram signature: bot_token, chat_id, enabled=True, timeout=..., max_retries=2, backoff_factor=0.8, use_background_thread=True
+        notifier = NotifierTelegram(
+            bot_token=telegram_cfg.get('bot_token', ''),
+            chat_id=telegram_cfg.get('chat_id', ''),
+            enabled=True,
+            timeout=timeout_cfg,
+            max_retries=telegram_cfg.get('max_retries', 2),
+            backoff_factor=telegram_cfg.get('backoff_factor', 0.8),
+            use_background_thread=telegram_cfg.get('use_background_thread', True),
+            # dedup_seconds param exists in the NotifierTelegram code previously suggested
+            dedup_seconds=dedup_seconds
+        )
 
     bot = LiveBot(cfg, notifier=notifier)
     # allow CLI override of dry_run
